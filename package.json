@@ -1,0 +1,38 @@
+{
+  "name": "frost",
+  "version": "1.0.0",
+  "description": "A window freezing over: ice ferns grow from its frame in Kobayashi's phase field for a growing crystal, stepped on the GPU, and the glass fogs between them. A finger melts it clear and it freezes over again. WebGL2 and GLSL, no dependencies.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Oliver Kure Olsen (https://work.draindk.tech)",
+  "repository": "github:Ollibolli8/Frost",
+  "keywords": [
+    "frost",
+    "ice",
+    "ice-ferns",
+    "crystal-growth",
+    "phase-field",
+    "dendrite",
+    "simulation",
+    "webgl",
+    "webgl2",
+    "glsl",
+    "shader",
+    "camera"
+  ],
+  "main": "src/frost.ts",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "build": "esbuild demo/main.ts --bundle --minify --format=esm --target=es2022 --outdir=docs && cp demo/index.html demo/public/* docs/",
+    "dev": "npm run build && npx --yes serve docs",
+    "check": "tsc --noEmit",
+    "test": "node --test \"test/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.0"
+  }
+}

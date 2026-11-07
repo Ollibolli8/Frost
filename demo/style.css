@@ -1,0 +1,56 @@
+/* Frost's demo: the window fills the screen, the type on a shade at the edges (the street's lights glow through the
+   frost, so the shade is deep where the type is). */
+:root { color-scheme: dark; --ink: #f4f3ef; --dim: rgb(244 243 239 / .72); --ground: #07090c; --pad: clamp(18px, 3.4vw, 48px);
+  --sans: "Inter", "Helvetica Neue", system-ui, sans-serif; --mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, monospace; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); font: 400 15px/1.45 var(--sans); }
+.fr { position: relative; height: 100svh; min-height: 520px; overflow: hidden; background: var(--ground); }
+.fr-photo, .fr-canvas, .fr-poster { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fr-photo, .fr-poster { object-fit: cover; object-position: 50% 52%; pointer-events: none; }
+/* the glass takes a finger (the page scrolls from the type and the bar) */
+.fr-canvas { opacity: 0; transition: opacity .3s; touch-action: none; outline: none; cursor: crosshair; }
+.fr[data-gl="on"] .fr-canvas { opacity: 1; }
+.fr-poster { display: none; }
+.fr[data-gl="off"] .fr-poster { display: block; }
+.fr[data-gl="off"] .fr-photo, .fr[data-gl="off"] .fr-canvas, .fr[data-gl="off"] .fr-cold, .fr[data-gl="off"] .fr-sources, .fr[data-gl="off"] .fr-thaw, .fr[data-gl="off"] .fr-save { display: none; }
+.fr::before, .fr::after { content: ""; position: absolute; left: 0; right: 0; pointer-events: none; z-index: 1; }
+.fr::before { top: 0; height: 300px; background: linear-gradient(rgb(7 9 12 / .8), rgb(7 9 12 / .52) 55%, rgb(7 9 12 / 0)); }
+.fr::after { bottom: 0; height: 230px; background: linear-gradient(rgb(7 9 12 / 0), rgb(7 9 12 / .58) 45%, rgb(7 9 12 / .84)); }
+/* the keyboard's finger: a ring where Space warms the glass */
+.fr-finger { position: absolute; z-index: 2; left: 50%; top: 50%; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--ink), 0 0 0 4px rgb(7 9 12 / .45); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.fr-canvas:focus-visible ~ .fr-finger { opacity: 1; }
+
+.fr-head, .fr-dock { position: absolute; z-index: 2; margin: 0; }
+/* the note, the bar and the credits stack up from the foot, so a bar that wraps or a note that comes pushes the rest up */
+.fr-dock { left: var(--pad); right: var(--pad); bottom: var(--pad); display: flex; flex-direction: column; gap: 14px; }
+.fr-note, .fr-foot { margin: 0; }
+.fr-note:empty { margin-bottom: -14px; }   /* (kept in the page, so a screen reader still hears what comes into it) */
+.fr-head { left: var(--pad); top: var(--pad); max-width: min(460px, 80vw); pointer-events: none; }
+.fr-head h1 { margin: 0 0 8px; font: 600 clamp(24px, 2.4vw, 32px)/1.05 var(--sans); letter-spacing: -.03em; }
+.fr-head p { margin: 0; color: var(--dim); text-wrap: pretty; }
+.fr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; font: 400 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.fr-sources { display: flex; gap: 6px; }
+.fr button, .fr-file { padding: 9px 13px; border: 0; border-radius: 999px; background: rgb(244 243 239 / .14); color: var(--ink); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .2s, color .2s; }
+.fr button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+.fr button:hover, .fr-file:hover { background: rgb(244 243 239 / .26); }
+.fr button[aria-pressed="true"]:hover { background: var(--ink); }
+.fr button:focus-visible, .fr-file:focus-within { outline: 1px solid var(--ink); outline-offset: 3px; }
+.fr-file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.fr-cold { display: flex; align-items: center; gap: 10px; }
+.fr-cold input { width: 140px; accent-color: var(--ink); }
+.fr-cold output { font-weight: 400; min-width: 8ch; font-variant-numeric: tabular-nums; }
+.fr-save { margin-left: auto; }
+.fr-note { font: 400 11px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+.fr-foot { font: 400 11px/1.5 var(--mono); letter-spacing: .06em; color: var(--dim); }
+.fr-foot a { color: inherit; text-underline-offset: .2em; }
+
+@media (max-width: 700px) {
+  .fr-photo, .fr-poster { object-position: 50% 50%; }
+  .fr-head { pointer-events: auto; }
+  .fr-head p { font-size: 14px; }
+  .fr-bar { gap: 10px 14px; }
+  .fr::after { height: 320px; }   /* the bar wraps to three rows here, under the note */
+  .fr-cold input { width: 110px; }
+}
+@media (prefers-reduced-motion: reduce) { .fr-canvas, .fr-finger, .fr button { transition: none; } }

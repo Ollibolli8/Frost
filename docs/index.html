@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Frost · a window freezing over</title>
+  <meta name="description" content="A window freezing over a snowy evening in Nyhavn: ice ferns grow in from its frame and a scratch, the glass fogs, and a finger melts it clear. Kobayashi's phase field on the GPU, WebGL2, no dependencies.">
+  <meta name="theme-color" content="#07090c">
+  <meta property="og:title" content="Frost">
+  <meta property="og:description" content="Ice ferns grow over a window from its frame. Hold a finger on the glass, or draw: it melts clear, and the ice grows back in.">
+  <meta property="og:image" content="https://ollibolli8.github.io/Frost/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="main.css">
+</head>
+<body>
+  <main class="fr" id="frost" data-gl="loading">
+    <!-- the photo itself while the window loads (the ice then grows over it); the poster, a frame of it, without WebGL 2 -->
+    <picture class="fr-pic">
+      <source media="(max-width: 700px)" srcset="nyhavn-tall.webp">
+      <img class="fr-photo" src="nyhavn.webp" alt="" fetchpriority="high">
+    </picture>
+    <canvas class="fr-canvas" tabindex="0" role="img" aria-label="The window. Hold Space to warm the glass where the ring is; the arrows move it."></canvas>
+    <span class="fr-finger" aria-hidden="true"></span>
+    <picture>
+      <source media="(max-width: 700px)" srcset="poster-tall.webp">
+      <img class="fr-poster" src="poster.webp" loading="lazy" alt="Ice ferns over a fogged window, and a trail a finger has melted clear through it onto Nyhavn's lit houses on a snowy evening.">
+    </picture>
+    <header class="fr-head">
+      <h1>Frost</h1>
+      <p>A window freezing over. Ice ferns grow in from its frame and from a scratch in the glass, and the glass fogs between them. Hold a finger on it, or draw: it melts clear, and the ice grows back in from the edge.</p>
+    </header>
+    <!-- the controls at the foot, with a line above them for what just happened and the credits under them -->
+    <div class="fr-dock">
+    <p class="fr-note" role="status"></p>
+    <div class="fr-bar">
+      <div class="fr-sources" role="group" aria-label="Behind the glass">
+        <button type="button" data-source="photo" aria-pressed="true">Nyhavn</button>
+        <button type="button" data-source="camera" aria-pressed="false">Camera</button>
+        <button type="button" class="fr-flip" hidden>Flip</button>
+        <label class="fr-file"><input type="file" accept="image/*,video/*">Your file</label>
+      </div>
+      <label class="fr-cold"><span>Glass</span><input type="range" min="-20" max="-2" step="0.5" value="-9"><output>−9.0 °C</output></label>
+      <button type="button" class="fr-thaw">Thaw</button>
+      <button type="button" class="fr-save">Save</button>
+    </div>
+    <p class="fr-foot"><a href="https://github.com/Ollibolli8/Frost">Source</a> · <a href="https://work.draindk.tech/lab/frost/">Maquette 07</a> · <a href="https://work.draindk.tech">Oliver Kure Olsen</a> · <a href="https://commons.wikimedia.org/wiki/File:Evening_with_snow_in_Nyhavn_10.jpg">Photo</a>: Leif Jørgensen (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>), cropped and frosted</p>
+    </div>
+  </main>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

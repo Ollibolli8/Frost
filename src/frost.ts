@@ -4,11 +4,12 @@
  * between them. A finger warms the glass and melts it clear where it is held or drawn, into water that beads and
  * dries; let go and the ice grows back over the spot from its edge, and the fog forms again.
  *
- * One file, no dependencies: WebGL 2 and six fragment shaders. The ice lives on a grid of cells (about one to a CSS
+ * One file, no dependencies: WebGL 2 and eight fragment shaders. The ice lives on a grid of cells (about one to a CSS
  * pixel, up to 900,000) that holds, for each cell, how much of it is ice (p), its temperature (T), the warmth a finger
- * has put into the glass (W) and the water left by melted ice; the fog on a grid of the same size. The street behind
- * the glass is a photo, a video or a camera, seen sharp through clear glass, softened through the fog and scattered
- * through the ice, which its light shows up.
+ * has put into the glass (W) and the water left by melted ice; the fog on a grid of the same size; and when each cell
+ * froze, so the ice can be drawn as the needles it grew as, along the way it grew, finer than the grid. The street
+ * behind the glass is a photo, a video or a camera, seen sharp through clear glass, softened through the fog and
+ * scattered through the ice, which its light shows up.
  */
 
 /** The model's constants, in its own units (Kobayashi 1993, with the anisotropy raised for sharper ferns). */
@@ -18,9 +19,9 @@ export const MODEL = {
   /** τ: how slowly the ice answers; ε̄: the interface's width; δ: how strongly it prefers six directions. */
   tau: 2e-4, eps: 0.01, delta: 0.045, sym: 6,
   /** K: the latent heat freezing gives off; α, γ: how the drive to freeze rises with the cold; Tₘ: the melting point. */
-  latent: 1.9, alpha: 0.9, gamma: 10, melt: 1,
+  latent: 2.2, alpha: 0.9, gamma: 10, melt: 1,
   /** The noise at the ice's edge that starts its side branches. */
-  noise: 0.02,
+  noise: 0.04,
   /** How quickly the glass draws heat back to its own temperature (per unit of model time). */
   cool: 0,
 };
@@ -322,6 +323,62 @@ void main() {
   o = uPass == 0 ? vec4(s.x, th, wa, s.z) : vec4(s.x, th, wa, s.w);
 }`;
 
+/** When each cell froze, on the ice's clock (its steps): the moment p crossed a half, found between this frame's state
+ *  and the last one's, so it is smooth from cell to cell; −1 while the cell is water or glass. A cell melted and
+ *  frozen again takes its new time. Once a frame. */
+const AGE = HEAD + `
+uniform sampler2D uS;    // p, T, W, water
+uniform sampler2D uG;    // before: when it froze, p
+uniform vec2 uClock;     // the ice's clock at the last frame and now
+uniform int uInit;       // a new window: what is ice now froze at 0
+void main() {
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  float p = texelFetch(uS, c, 0).x;
+  if (uInit == 1) { o = vec4(p >= 0.5 ? 0.0 : -1.0, p, 0.0, 1.0); return; }
+  vec2 g = texelFetch(uG, c, 0).xy;
+  float t = g.x;
+  if (p < 0.5) t = -1.0;
+  else if (t < 0.0) t = mix(uClock.x, uClock.y, clamp((0.5 - g.y) / max(p - g.y, 1e-6), 0.0, 1.0));
+  o = vec4(t, p, 0.0, 1.0);
+}`;
+
+/** The way the ice grew at each cell, up its age (from where it froze first toward where it froze last: along a fern's
+ *  stem, and out across its sides), as a doubled angle, since a needle has no head or tail; and how near the ice is.
+ *  Pass 0 finds it, passes 1 and 2 blur it across and up, which smooths it and carries it a few cells past the ice's
+ *  edge, for the needles that run on past it. */
+const DIR = HEAD + `
+uniform sampler2D uG;    // when it froze (pass 0), the pass before (1, 2)
+uniform ivec2 uN;
+uniform ivec2 uDir;
+uniform int uPass;
+uniform float uAhead;    // steps: how much later the glass next to the ice will freeze than the ice beside it
+float tf(ivec2 c) { return texelFetch(uG, clamp(c, ivec2(0), uN - 1), 0).x; }
+float across(float a, float b, float t) {
+  // the cells either side; one that isn't ice yet freezes after this one
+  return 0.5 * ((a < 0.0 ? t + uAhead : a) - (b < 0.0 ? t + uAhead : b));
+}
+void main() {
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  if (uPass == 0) {
+    float t = tf(c);
+    if (t < 0.0) { o = vec4(0.0); return; }
+    vec2 g = vec2(across(tf(c + ivec2(1, 0)), tf(c - ivec2(1, 0)), t), across(tf(c + ivec2(0, 1)), tf(c - ivec2(0, 1)), t));
+    float l = length(g);
+    vec2 u = l > 1e-6 ? g / l : vec2(0.0);
+    // a seed froze all at once: no way there
+    o = vec4(vec2(u.x * u.x - u.y * u.y, 2.0 * u.x * u.y) * smoothstep(0.0, 0.5, l), 1.0, 0.0);
+    return;
+  }
+  vec4 sum = texelFetch(uG, c, 0);
+  float k0 = 1.0;
+  for (int i = 1; i <= 5; i++) {
+    float k = exp(-float(i * i) / 8.0);
+    sum += (texelFetch(uG, clamp(c + uDir * i, ivec2(0), uN - 1), 0) + texelFetch(uG, clamp(c - uDir * i, ivec2(0), uN - 1), 0)) * k;
+    k0 += 2.0 * k;
+  }
+  o = sum / k0;
+}`;
+
 /** The street, made soft (as the eye sees it past frost it is focused on) and softer still (as ice scatters it): a
  *  separable Gaussian, at a quarter and then a sixteenth of the picture's size. The first pass reads the picture's own
  *  quarter-size mip (a video frame comes as sRGB bytes and is decoded here); the rest read linear light. */
@@ -354,6 +411,7 @@ uniform sampler2D uFilm;   // the frost film, the wet it left (grid)
 uniform sampler2D uSharp;  // the photo (sRGB, mipmapped) or a video frame
 uniform sampler2D uSoft;   // the photo out of focus
 uniform sampler2D uGlow;   // the photo scattered
+uniform sampler2D uWay;    // the way the ice grew (a doubled angle), how near it is (grid)
 uniform vec2 uRes;         // canvas px
 uniform float uScale;      // canvas px per CSS px
 uniform vec4 uFit;         // the photo's rectangle on the canvas (px, from the top left)
@@ -366,6 +424,13 @@ uniform int uMirror;
 vec3 dec(vec3 c) { return uDecode == 1 ? mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)) : c; }
 float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 vec2 hash2(vec2 p) { return vec2(hash(p), hash(p + 17.31)); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), u = fract(p); u = u * u * (3.0 - 2.0 * u);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+// the grain the needles are drawn from: smooth noise in cells of 0.7 CSS px
+float fibre(vec2 q, float css) { return vnoise(q * css * 1.4); }
+vec2 wayOf(vec4 d) { float a = 0.5 * atan(d.y, d.x); return vec2(cos(a), sin(a)); }
 vec2 fit(vec2 q) { vec2 uv = (q - uFit.xy) / uFit.zw; if (uMirror == 1) uv.x = 1.0 - uv.x; return uv; }
 void main() {
   vec2 q = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);          // canvas px from the top left
@@ -417,9 +482,42 @@ void main() {
   vec2 hp = q * css;
   float sugar = 0.78 + 0.3 * hash(floor(hp * 0.8)) + 0.12 * hash(floor(hp * 0.31));
   vec3 tint = vec3(0.86, 0.93, 1.0);
+  // the ice's needles: that grain drawn out along the way the ice grew (a line integral convolution: averaged along
+  // the path up the growth from here, both ways), so a fern reads as the feathers of needles it is made of, finer than
+  // the grid it grew on
+  vec4 D = texture(uWay, g);
+  float needles = 0.5, sheen = 0.0;
+  if (D.z > 0.3) {
+    vec2 way = wayOf(D);
+    float step1 = 0.8 / ((uRes.x / uScale) / uGrid.x);                 // 0.8 CSS px, in cells
+    float acc = fibre(q, css), sum = 1.0;
+    for (int dir = 0; dir < 2; dir++) {
+      vec2 at = g, last = dir == 0 ? way : -way;
+      for (int i = 1; i <= 14; i++) {
+        vec4 d = texture(uWay, at);
+        if (d.z < 0.45) break;                                         // a needle ends at the ice's edge
+        vec2 w = wayOf(d);
+        last = dot(w, last) < 0.0 ? -w : w;
+        at += last * step1 / uGrid;
+        float k = exp(-float(i * i) / 70.0);
+        acc += fibre(vec2(at.x * uRes.x, (1.0 - at.y) * uRes.y), css) * k;
+        sum += k;
+      }
+    }
+    needles = clamp((acc / sum - 0.5) * 10.0 + 0.5, 0.0, 1.0);
+    // the needles catch the room's lamp across their length, as brushed metal does (Kajiya and Kay's highlight)
+    vec3 t = vec3(way.x, -way.y, 0.0);
+    vec3 h = normalize(normalize(vec3((uLight - q) * css / 420.0, 1.0)) + vec3(0.0, 0.0, 1.0));
+    float th2 = dot(t, h);
+    sheen = pow(max(1.0 - th2 * th2, 0.0), 30.0) * uLit;
+  }
   vec3 col = direct;
-  col += back * tint * (filmOp * 0.55 * (0.85 + 0.3 * hash(floor(hp * 0.5))) + iceOp * (0.6 + 0.9 * th) * sugar);
-  col += back * tint * side * 0.95;
+  col += back * tint * (filmOp * 0.55 * (0.85 + 0.3 * hash(floor(hp * 0.5))) + iceOp * (0.6 + 0.9 * th) * sugar * mix(0.35, 1.5, needles));
+  col += back * tint * side * 0.5;
+  col += (back * 0.6 + vec3(0.05)) * tint * ice * sheen * 0.8 * (0.3 + needles);
+  // the ice's edge is ragged with them: the bright ones run on a little past it
+  float fringe = smoothstep(0.6, 0.85, needles) * smoothstep(0.3, 0.5, D.z) * (1.0 - ice);
+  col = col * (1.0 - 0.35 * fringe) + back * tint * fringe * 0.9 * sugar;
   // glints: a facet catches the lamp in the room as the pointer moves
   vec2 gid = floor(hp / 3.0), gh = hash2(gid);
   if (gh.x > 0.97 && ice > 0.5) {
@@ -473,7 +571,7 @@ export function createFrost(o: FrostOptions) {
     gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.bindAttribLocation(prog, 0, "p"); gl.linkProgram(prog);
     return { prog, fs, u: new Map() };
   };
-  const P = { init: make(INIT), step: make(STEP), film: make(FILM), blur: make(BLUR), soft: make(SOFT), look: make(LOOK) };
+  const P = { init: make(INIT), step: make(STEP), film: make(FILM), blur: make(BLUR), age: make(AGE), way: make(DIR), soft: make(SOFT), look: make(LOOK) };
   const progs = Object.values(P);
   let linked = false;
 
@@ -511,6 +609,8 @@ export function createFrost(o: FrostOptions) {
   let state: [Target, Target] | null = null, aux: Target | null = null, lookA: Target | null = null, look: Target | null = null;
   // the frost film between the ferns (two, stepped from one into the other)
   let film: [Target, Target] | null = null;
+  // when each cell froze (two, stepped from one into the other), and the way the ice grew (found, across, up)
+  let age: [Target, Target] | null = null, ac = 0, wayA: Target | null = null, wayB: Target | null = null, way: Target | null = null;
   let seedNo = o.seed ?? 7, cold = clamp(o.cold ?? -9, ...COLD), layout = seeds(1, 1, seedNo);
 
   // the street: the picture, out of focus and scattered
@@ -565,12 +665,15 @@ export function createFrost(o: FrostOptions) {
     gh = Math.max(32, Math.min(maxSize, Math.round(cells / gw)));
     if (state) { drop(state[0]); drop(state[1]); }
     if (film) { drop(film[0]); drop(film[1]); }
-    drop(aux); drop(lookA); drop(look);
+    if (age) { drop(age[0]); drop(age[1]); }
+    drop(aux); drop(lookA); drop(look); drop(wayA); drop(wayB); drop(way);
     state = [target(gw, gh, gl!.RGBA32F, false), target(gw, gh, gl!.RGBA32F, false)];
     film = [target(gw, gh, gl!.RG16F, true), target(gw, gh, gl!.RG16F, true)];
     aux = target(gw, gh, gl!.RGBA16F, false);
     lookA = target(gw, gh, gl!.RGBA16F, false);
     look = target(gw, gh, gl!.RGBA16F, true);
+    age = [target(gw, gh, gl!.RG32F, false), target(gw, gh, gl!.RG32F, false)]; ac = 0;
+    wayA = target(gw, gh, gl!.RGBA16F, false); wayB = target(gw, gh, gl!.RGBA16F, false); way = target(gw, gh, gl!.RGBA16F, true);
     steps = 0; cur = 0; fc = 0;
     // a finer grid takes more steps to cover the same share of the window
     pace = Math.sqrt(gw * gh / 520000);
@@ -602,6 +705,7 @@ export function createFrost(o: FrostOptions) {
       // into the other state, reading this one's water (a new window after a thaw keeps the melt on the glass)
       gl!.uniform1i(u("uMode"), 0); gl!.uniform1i(u("uKeep"), steps > 0 ? 1 : 0);
       bind(0, state![cur].tex); into(state![1 - cur]); cur = 1 - cur;
+      ageIce(0, 0, true);
     }
   }
 
@@ -654,6 +758,28 @@ export function createFrost(o: FrostOptions) {
     bind(0, state[cur].tex); bind(1, film[fc].tex); bind(2, aux.tex);
     into(film[1 - fc]);
     fc = 1 - fc;
+  }
+
+  /** When the cells that froze since the last frame froze, between the clock's two readings (or, for a new window,
+   *  what is ice froze at 0). */
+  function ageIce(t0: number, t1: number, init = false) {
+    if (!state || !age) return;
+    const u = use(P.age);
+    gl!.viewport(0, 0, gw, gh);
+    gl!.uniform1i(u("uS"), 0); gl!.uniform1i(u("uG"), 1); gl!.uniform2f(u("uClock"), t0, t1); gl!.uniform1i(u("uInit"), init ? 1 : 0);
+    bind(0, state[cur].tex); bind(1, age[ac].tex);
+    into(age[1 - ac]); ac = 1 - ac;
+  }
+
+  /** The way the ice grew: found, then blurred across and up. */
+  function wayIce() {
+    if (!age || !wayA || !wayB || !way) return;
+    const u = use(P.way);
+    gl!.viewport(0, 0, gw, gh);
+    gl!.uniform1i(u("uG"), 0); gl!.uniform2i(u("uN"), gw, gh); gl!.uniform1f(u("uAhead"), 40 * pace);
+    gl!.uniform1i(u("uPass"), 0); bind(0, age[ac].tex); into(wayA);
+    gl!.uniform1i(u("uPass"), 1); gl!.uniform2i(u("uDir"), 1, 0); bind(0, wayA.tex); into(wayB);
+    gl!.uniform1i(u("uPass"), 2); gl!.uniform2i(u("uDir"), 0, 1); bind(0, wayB.tex); into(way);
   }
 
   /** The ice's look for this frame: across, then up. */
@@ -723,8 +849,9 @@ export function createFrost(o: FrostOptions) {
   }
 
   function draw(now: number) {
-    if (!linked || !tex || !look || !film || !softB || !glowB) return false;
+    if (!linked || !tex || !look || !film || !softB || !glowB || !way) return false;
     blurIce();
+    wayIce();
     const u = use(P.look);
     const cw = canvas.width, ch = canvas.height;
     gl!.viewport(0, 0, cw, ch);
@@ -741,8 +868,8 @@ export function createFrost(o: FrostOptions) {
     gl!.uniform1f(u("uTime"), (now / 1000) % 1000);
     gl!.uniform1i(u("uDecode"), srgb ? 0 : 1); gl!.uniform1i(u("uMirror"), mirror ? 1 : 0);
     gl!.uniform1f(u("uLit"), hover || press ? 1 : 0.35);
-    gl!.uniform1i(u("uLook"), 0); gl!.uniform1i(u("uSharp"), 1); gl!.uniform1i(u("uSoft"), 2); gl!.uniform1i(u("uGlow"), 3); gl!.uniform1i(u("uFilm"), 4);
-    bind(0, look.tex); bind(1, tex); bind(2, softB.tex); bind(3, glowB.tex); bind(4, film[fc].tex);
+    gl!.uniform1i(u("uLook"), 0); gl!.uniform1i(u("uSharp"), 1); gl!.uniform1i(u("uSoft"), 2); gl!.uniform1i(u("uGlow"), 3); gl!.uniform1i(u("uFilm"), 4); gl!.uniform1i(u("uWay"), 5);
+    bind(0, look.tex); bind(1, tex); bind(2, softB.tex); bind(3, glowB.tex); bind(4, film[fc].tex); bind(5, way.tex);
     into(null);
     return true;
   }
@@ -776,6 +903,7 @@ export function createFrost(o: FrostOptions) {
       owed = Math.min(owed - n, cap);
     }
     stepIce(n, secs);
+    if (n > 0) ageIce(steps - n, steps);
     // the film forms in the ice's time: with the time-lapse at the start, and faster still behind a still window's photo
     if (n > 0) stepFilm(n / (230 * pace) * (preroll > 0 ? 2.5 : 1));
     const drew = (n > 0 || dirty || !!v) && draw(now);
@@ -941,7 +1069,7 @@ export function createFrost(o: FrostOptions) {
     /** Takes n steps at once (for stills and tests), then draws. */
     advance(n: number) {
       if (!linked) return;
-      for (let i = 0; i < n; i += 50) { const k = Math.min(50, n - i); stepIce(k, k / 260); stepFilm(k / (230 * pace)); }
+      for (let i = 0; i < n; i += 50) { const k = Math.min(50, n - i); stepIce(k, k / 260); ageIce(steps - k, steps); stepFilm(k / (230 * pace)); }
       draw(performance.now());
     },
     /** The grid's state (p, T, W, water for each cell, rows from the foot up), for tests. */

@@ -6,7 +6,7 @@ Nyhavn on a snowy evening, or your own photo, video or camera.
 
 **[Live demo](https://ollibolli8.github.io/Frost/)** · Maquette 07 on [work.draindk.tech](https://work.draindk.tech/lab/frost/)
 
-One TypeScript file, no dependencies: WebGL 2 and six fragment shaders, about 29 KB minified (12 KB gzipped).
+One TypeScript file, no dependencies: WebGL 2 and eight fragment shaders, about 34 KB minified (13 KB gzipped).
 
 ## How it works
 
@@ -16,7 +16,8 @@ One TypeScript file, no dependencies: WebGL 2 and six fragment shaders, about 29
   growth round it, so the edge breaks up into arms and the arms into side branches. Its edge prefers six directions,
   ε = ε̄(1 + δ cos 6(θ − θ₀)), the sixfold of ice, with θ₀ each crystal's own turn; the shader takes the sixfold terms
   from the edge's normal as a complex number raised to the sixth power, with no trig. The constants (τ 2·10⁻⁴,
-  ε̄ 0.01, δ 0.045, K 1.9) grow the ferns: thin stems with dense side needles. The stencil is the 13 cells of a
+  ε̄ 0.01, δ 0.045, K 2.2, and a little noise at the edge, 0.04) grow the ferns: thin stems with dense side
+  branches. The stencil is the 13 cells of a
   radius-2 cross and its diagonals, in 32-bit floats (a step moves *p* by less than half precision holds).
 - **A cell to a pixel**: a fern's needles are a few cells across, so the grid is about one cell to a CSS pixel (up
   to 900,000 cells on a desktop; on a phone about 1.6 to a CSS pixel, up to 520,000, so its smaller window still
@@ -45,6 +46,11 @@ One TypeScript file, no dependencies: WebGL 2 and six fragment shaders, about 29
   thickness (*p* blurred: thickest down a fern's stem) bends the street behind it and whitens it, and its surface has
   the grain of hoar. A mouse over the glass is a lamp in the room: a facet glints as it moves. Each bead of water is
   a small lens that turns the street over.
+- **The needles**: each cell keeps the moment it froze (to a fraction of a step), so the ice knows the way it grew:
+  the slope of that time, smoothed across a few cells and carried a little past the edge. Fine noise is smeared along
+  that way, 14 samples each side (line integral convolution), so a fern is drawn as a feather of needles finer than
+  the grid, ragged at its tips. The needles brighten and dim the light the ice scatters, and the mouse's lamp runs
+  along them as along brushed metal.
 - **Pictures**: a photo is stored as sRGB, so the GPU filters it in linear light; a video or a camera goes up frame
   by frame as the browser hands it over (`requestVideoFrameCallback`) and is decoded in the shader. A front camera is
   drawn as a mirror shows you.

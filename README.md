@@ -23,10 +23,11 @@ One TypeScript file, no dependencies: WebGL 2 and eight fragment shaders, about 
   to 900,000 cells on a desktop; on a phone about 1.6 to a CSS pixel, up to 520,000, so its smaller window still
   holds fine ferns). A finer grid takes more steps to cover the same share of the
   window, so the steps a second scale with it and every screen sees the same window freeze.
-- **Where it starts**: seeds along the frame (densest at its foot, where cold air runs down the glass), a row of
-  nuclei along a scratch high on one side, and three specks of dust, each crystal turned its own way. The glass is
-  coldest at its frame and its foot and warmest in its middle (`coldField`), so the ferns reach in from the edges and
-  the middle stays clearest. The latent heat stays in the glass, so the ice stops by itself once it has covered as much
+- **Where it starts**: seeds along the frame (densest at its foot, where cold air runs down the glass) and a row of
+  nuclei along a scratch high on one side, each crystal turned its own way. Nothing starts alone in open glass: a
+  crystal there grows as a six-armed star, which reads as a paper snowflake rather than frost. The glass is coldest at
+  its frame and its foot and warmest in its middle (`coldField`), so the ferns reach in from the edges and the middle
+  stays clearest. The latent heat stays in the glass, so the ice stops by itself once it has covered as much
   as the cold allows; the dial (−20 to −2 °C) sets how far.
 - **The fog**: between the ferns a film of hoar forms over the dry glass, unevenly, in drifts, thinner in the warm
   middle and stopping short of each fern, which has taken the vapour round it. It softens and lifts the street behind

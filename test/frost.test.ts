@@ -17,7 +17,7 @@ test("ε and dε/dθ are ε̄(1 + δ cos 6(θ − θ₀)) and its derivative, wi
   assert.deepEqual(anisotropy(0, 0, 0.3), [MODEL.eps, 0]);
 });
 
-test("the same seed lays the same window out; the ice starts on the frame, a scratch and a few specks of dust", () => {
+test("the same seed lays the same window out; the ice starts on the frame and a scratch, nowhere else", () => {
   for (const [w, h] of [[1200, 750], [548, 548], [390, 770]]) {
     const a = seeds(w, h, 7), b = seeds(w, h, 7), c = seeds(w, h, 8);
     assert.deepEqual(a, b);
@@ -29,11 +29,11 @@ test("the same seed lays the same window out; the ice starts on the frame, a scr
       if (s.frame) assert.ok(Math.min(s.x, w - s.x, s.y, h - s.y) < 2, "a frame seed sits on the frame");
     }
     const inside = a.seeds.filter(s => !s.frame);
-    assert.ok(inside.length >= 7, "dust and the scratch");
-    // the scratch's nuclei lie along it
+    // every seed off the frame is a nucleus on the scratch: none alone in open glass, where it would grow as a star
     const { ax, ay, bx, by } = a.scratch, len = Math.hypot(bx - ax, by - ay);
     const along = inside.filter(s => Math.abs((bx - ax) * (ay - s.y) - (ax - s.x) * (by - ay)) / len < 1);
     assert.ok(along.length >= 4, `${along.length} nuclei on the scratch`);
+    assert.equal(along.length, inside.length, "a seed off the frame and off the scratch");
     // most of the frame's seeds are at its foot, where the glass is coldest
     const foot = a.seeds.filter(s => s.frame && s.y < 2).length, head = a.seeds.filter(s => s.frame && s.y > h - 2).length;
     assert.ok(foot > head);

@@ -1,7 +1,6 @@
 /**
- * Frost: a window freezing over. Ice ferns grow over it from its frame, a scratch in the glass and a few specks of
- * dust, in Kobayashi's phase field for a growing crystal (1993), stepped on the GPU, and a film of hoar fogs the glass
- * between them. A finger warms the glass and melts it clear where it is held or drawn, into water that beads and
+ * Frost: a window freezing over. Ice ferns grow over it from its frame and a scratch in the glass, in Kobayashi's
+ * phase field for a growing crystal (1993), stepped on the GPU, and a film of hoar fogs the glass between them. A finger warms the glass and melts it clear where it is held or drawn, into water that beads and
  * dries; let go and the ice grows back over the spot from its edge, and the fog forms again.
  *
  * One file, no dependencies: WebGL 2 and eight fragment shaders. The ice lives on a grid of cells (about one to a CSS
@@ -84,8 +83,8 @@ export function random(seed: number) {
 export type Seed = { x: number; y: number; r: number; angle: number; frame: boolean };
 export type Scratch = { ax: number; ay: number; bx: number; by: number; angle: number };
 
-/** Where the ice starts on a grid of w × h cells (y up): along the frame (densest at the foot), a scratch in the
- *  glass and a few specks of dust, each crystal turned its own way. At most 60 seeds. */
+/** Where the ice starts on a grid of w × h cells (y up): along the frame (densest at the foot) and a scratch in the
+ *  glass, each crystal turned its own way. At most 60 seeds. */
 export function seeds(w: number, h: number, seed: number) {
   const rnd = random(seed), list: Seed[] = [];
   const angle = () => rnd() * Math.PI / 3;
@@ -100,11 +99,9 @@ export function seeds(w: number, h: number, seed: number) {
   along(Math.max(2, Math.round(h / (s * 0.16))), u => [1.5, (0.06 + u * 0.88) * h]);   // the left
   along(Math.max(2, Math.round(h / (s * 0.18))), u => [w - 1.5, (0.1 + u * 0.82) * h]); // the right
   along(Math.max(2, Math.round(w / (s * 0.24))), u => [(0.12 + u * 0.8) * w, h - 1.5]); // the head
-  // dust: a few specks between the frame and the middle, where single six-armed stars grow
-  for (let i = 0; i < 3; i++) {
-    const a = rnd() * Math.PI * 2, d = 0.28 + rnd() * 0.12;
-    list.push({ x: w * (0.5 + Math.cos(a) * d), y: h * (0.5 + Math.sin(a) * d * 0.9), r: 2, angle: angle(), frame: false });
-  }
+  // no specks of dust: alone in open glass a crystal grows as a six-armed star, which reads as a paper snowflake, not
+  // frost. Their nine draws are kept, so each window keeps its scratch where it was.
+  for (let i = 0; i < 9; i++) rnd();
   // a scratch, high on one side, slanting down towards the middle
   const left = rnd() < 0.5, len = w * (0.16 + rnd() * 0.08), tilt = 0.32 + rnd() * 0.2;
   const ax = w * (left ? 0.16 : 0.84), ay = h * (0.74 + rnd() * 0.08);

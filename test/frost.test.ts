@@ -30,6 +30,7 @@ test("the same seed lays the same window out; the ice starts on the frame and a 
     }
     const inside = a.seeds.filter(s => !s.frame);
     // every seed off the frame is a nucleus on the scratch: none alone in open glass, where it would grow as a star
+    assert.ok(a.scratch);
     const { ax, ay, bx, by } = a.scratch, len = Math.hypot(bx - ax, by - ay);
     const along = inside.filter(s => Math.abs((bx - ax) * (ay - s.y) - (ax - s.x) * (by - ay)) / len < 1);
     assert.ok(along.length >= 4, `${along.length} nuclei on the scratch`);
@@ -37,6 +38,24 @@ test("the same seed lays the same window out; the ice starts on the frame and a 
     // most of the frame's seeds are at its foot, where the glass is coldest
     const foot = a.seeds.filter(s => s.frame && s.y < 2).length, head = a.seeds.filter(s => s.frame && s.y > h - 2).length;
     assert.ok(foot > head);
+  }
+});
+
+test("round a frame inside the canvas the ice starts on the frame's edges, most at its foot, and nowhere else", () => {
+  const frame: [number, number, number, number] = [0.27, 0.21, 0.73, 0.79];
+  for (const [w, h] of [[1300, 520], [520, 330]]) {
+    const a = seeds(w, h, 7, frame), b = seeds(w, h, 7, frame);
+    assert.deepEqual(a, b);
+    assert.equal(a.scratch, null);
+    assert.ok(a.seeds.length >= 12 && a.seeds.length <= 60, `${a.seeds.length} seeds`);
+    const x0 = frame[0] * w, x1 = frame[2] * w, y0 = (1 - frame[3]) * h, y1 = (1 - frame[1]) * h;
+    for (const s of a.seeds) {
+      assert.ok(s.frame);
+      assert.ok(s.x >= x0 - 1e-9 && s.x <= x1 + 1e-9 && s.y >= y0 - 1e-9 && s.y <= y1 + 1e-9, "on the frame");
+      assert.ok(Math.min(s.x - x0, x1 - s.x, s.y - y0, y1 - s.y) < 1e-6, "on one of its edges");
+    }
+    const foot = a.seeds.filter(s => Math.abs(s.y - y0) < 1e-6).length, head = a.seeds.filter(s => Math.abs(s.y - y1) < 1e-6).length;
+    assert.ok(foot > head * 3, `${foot} at the foot, ${head} at the head`);
   }
 });
 

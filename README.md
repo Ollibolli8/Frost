@@ -79,11 +79,16 @@ const camera = await openCamera();         // the front camera, muted and playin
 frost.setSource(camera.video, { mirror: camera.mirror });
 ```
 
+`frame: [left, top, right, bottom]` (shares of the canvas from its top left) grows the ice out of a frame inside the
+canvas instead of out of its own edges: lay a canvas larger than a picture over it, pass the page as it stands as the
+source, and the ferns grow out of the picture's frame, reaching out sideways and stopping, with only a thin fog
+outside it. work.draindk.tech frames its Maquettes with it.
+
 `setCold(c)` (−20 to −2 °C), `thaw()`, `touch(x, y)` and `touch(null)` (a finger for keys and tests, in CSS px of
 the canvas), `setStill(s)`, `setActive(a)` (nothing stepped or drawn while off screen), `setPixelRatio(p)`,
 `snapshot(type)` (the frame as a file) and `dispose()`. `advance(n)` takes n steps at once and `read()` returns the
 grid (*p*, *T*, *W* and the water for each cell), for stills and tests. Without a canvas, `anisotropy(gx, gy, θ₀)` is
-the shader's ε and dε/dθ, `seeds(w, h, seed)` where the ice starts, `coldField(c)` the glass's temperature and
+the shader's ε and dε/dθ, `seeds(w, h, seed, frame?)` where the ice starts, `coldField(c)` the glass's temperature and
 `filmAt(c)` how thick the fog grows.
 
 ## Build the demo

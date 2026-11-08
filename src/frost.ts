@@ -82,12 +82,32 @@ export function random(seed: number) {
 
 export type Seed = { x: number; y: number; r: number; angle: number; frame: boolean };
 export type Scratch = { ax: number; ay: number; bx: number; by: number; angle: number };
+/** A frame inside the canvas, in shares of its width and height from its top left: left, top, right, bottom. */
+export type Frame = [number, number, number, number];
 
 /** Where the ice starts on a grid of w × h cells (y up): along the frame (densest at the foot) and a scratch in the
- *  glass, each crystal turned its own way. At most 60 seeds. */
-export function seeds(w: number, h: number, seed: number) {
+ *  glass, each crystal turned its own way. At most 60 seeds. With a `frame` inside the canvas, the ice starts on its
+ *  edges instead, scattered (an even row of ferns round a picture reads as a garland), and there is no scratch. */
+export function seeds(w: number, h: number, seed: number, frame?: Frame): { seeds: Seed[]; scratch: Scratch | null } {
   const rnd = random(seed), list: Seed[] = [];
   const angle = () => rnd() * Math.PI / 3;
+  if (frame) {
+    const x0 = frame[0] * w, x1 = frame[2] * w, y0 = (1 - frame[3]) * h, y1 = (1 - frame[1]) * h;
+    const fw = x1 - x0, fh = y1 - y0, s = Math.min(fw, fh);
+    const scatter = (n: number, r: number, at: (u: number) => [number, number]) => {
+      for (let i = 0; i < n; i++) {
+        const u = rnd();
+        if (rnd() < 0.18) continue;
+        const [x, y] = at(u);
+        list.push({ x, y, r: r + rnd() * 2.5, angle: angle(), frame: true });
+      }
+    };
+    scatter(Math.max(3, Math.round(fw / (s * 0.1))), 2.5, u => [x0 + u * fw, y0]);                  // the foot: densest
+    scatter(Math.max(2, Math.round(fh / (s * 0.143))), 2.2, u => [x0, y0 + Math.pow(u, 1.6) * fh]);  // the left, most low down
+    scatter(Math.max(2, Math.round(fh / (s * 0.125))), 2.2, u => [x1, y0 + Math.pow(u, 1.4) * fh]);  // the right
+    scatter(2, 2, u => [x0 + (0.15 + 0.7 * u) * fw, y1]);                                            // the head: hardly any
+    return { seeds: list.slice(0, 60), scratch: null };
+  }
   const along = (n: number, at: (u: number) => [number, number]) => {
     for (let i = 0; i < n; i++) {
       const [x, y] = at((i + 0.5 + (rnd() - 0.5) * 0.7) / n);
@@ -136,6 +156,11 @@ export type FrostOptions = {
   cells?: number;
   /** No time-lapse at the start: the window opens frosted, and the ice only moves where it is touched. */
   still?: boolean;
+  /** A frame inside the canvas for the ice to grow out of, in place of the canvas's own edges: left, top, right and
+   *  bottom, in shares of the canvas from its top left. Inside it the glass freezes as a window does; outside it the
+   *  ice reaches out from the frame, furthest sideways, hardly up or down, and stops, and the fog stays thin. For a
+   *  picture on a page with the canvas laid over it, larger than it (the street is then the page as it stands). */
+  frame?: Frame;
   /** Canvas px per CSS px. Default: the device's, at most 2. */
   pixelRatio?: number;
   /** After each frame drawn. */
@@ -241,6 +266,7 @@ uniform float uFrame[60];  // 1 for a seed on the frame
 uniform int uCount;
 uniform ivec2 uN;
 uniform vec3 uCold;        // the glass at its frame, in its middle, how much colder at its foot
+uniform vec4 uBox;         // a frame inside the canvas (cells, y up: left, foot, right, head); empty, the canvas's own
 uniform int uMode;
 uniform sampler2D uPrev;    // the window before: its water stays on the glass
 uniform int uKeep;
@@ -260,6 +286,22 @@ void main() {
   float aspect = float(uN.x) / float(uN.y);
   float edge = min(min(u.x, 1.0 - u.x) * aspect, min(u.y, 1.0 - u.y)) / (0.5 * min(aspect, 1.0));
   float glass = mix(uCold.x, uCold.y, pow(clamp(edge, 0.0, 1.0), 0.75)) - uCold.z * (1.0 - u.y);
+  if (uBox.z > uBox.x) {
+    // a frame inside the canvas: inside it, a window's glass; outside, glass that warms away from the frame, soonest
+    // up and down, so the ferns reach out sideways and stop. A little colder towards its lower left corner, so the
+    // frost there runs on further and the four sides differ.
+    vec2 lo = uBox.xy, hi = uBox.zw;
+    float s = min(hi.x - lo.x, hi.y - lo.y);
+    float side = max(lo.x - q.x, q.x - hi.x), below = max(lo.y - q.y, 0.0), above = max(q.y - hi.y, 0.0);
+    float chill = 0.14 * exp(-distance(q, lo) / (0.47 * s));
+    if (side > 0.0 || below > 0.0 || above > 0.0) {
+      float far = length(vec2(max(side, 0.0), below * 3.2 + above * 1.7));
+      glass = mix(uCold.x, 1.05, smoothstep(0.0, 0.27 * s, far)) - chill;
+    } else {
+      float inside = min(min(q.x - lo.x, hi.x - q.x), min(q.y - lo.y, hi.y - q.y));
+      glass = mix(uCold.x, uCold.y, pow(clamp(inside / (0.5 * s), 0.0, 1.0), 0.75)) - uCold.z * (1.0 - (q.y - lo.y) / (hi.y - lo.y)) - chill;
+    }
+  }
   float water = uKeep == 1 ? texelFetch(uPrev, ivec2(q), 0).w : 0.0;
   o = uMode == 0 ? vec4(ice, glass, 0.0, water) : vec4(cos(turn), sin(turn), pin, glass);
 }`;
@@ -274,6 +316,7 @@ uniform sampler2D uA;    // the glass's temperature in .w
 uniform float uDt;       // seconds of the ice's time since the last
 uniform float uThaw;
 uniform float uMax;      // how thick it grows at this cold
+uniform vec4 uBox;       // a frame inside the canvas (cells, y up), as INIT's
 const float GROW = ${f(RATE.film)}, MELT = ${f(RATE.filmMelt)}, DRY = ${f(RATE.dry)};
 float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float vnoise(vec2 p) {
@@ -289,7 +332,10 @@ void main() {
   vec2 q = vec2(c);
   // uneven, as frost is: in drifts some twenty cells across, with a finer grain
   float grain = 0.5 + 0.5 * vnoise(q / 26.0) * (0.75 + 0.25 * vnoise(q / 6.0));
-  float target = uMax * grain * clamp(1.0 - glass * 1.4, 0.35, 1.0);
+  // (round a frame inside the canvas, warm glass takes none, and the glass outside the frame only a thin film)
+  float framed = uBox.z > uBox.x ? 1.0 : 0.0;
+  float target = uMax * grain * clamp(1.0 - glass * 1.4, 0.35 * (1.0 - framed), 1.0);
+  if (framed > 0.5) { vec2 inF = step(uBox.xy, q) * step(q, uBox.zw); target *= mix(0.12, 1.0, inF.x * inF.y); }
   float wet = max(h.g, s.w);
   float grow = (1.0 - exp(-uDt / GROW)) * (1.0 - smoothstep(0.02, 0.2, wet)) * (1.0 - smoothstep(0.05, 0.3, warm));
   float film = h.r + max(target - h.r, 0.0) * grow;
@@ -680,7 +726,7 @@ export function createFrost(o: FrostOptions) {
   /** The window as it starts: the seeds, each cell's crystal and the glass's temperature. */
   function start() {
     if (!state || !aux) return;
-    layout = seeds(gw, gh, seedNo);
+    layout = seeds(gw, gh, seedNo, o.frame);
     writeAux(true);
     born = -1; steps = 0; owed = 0;
     if (still) preroll = Math.round(5200 * pace);
@@ -694,6 +740,7 @@ export function createFrost(o: FrostOptions) {
     gl!.uniform2i(u("uN"), gw, gh);
     const c = coldField(cold);
     gl!.uniform3f(u("uCold"), c.frame, c.middle, c.foot);
+    box(u);
     gl!.viewport(0, 0, gw, gh);
     gl!.uniform1i(u("uKeep"), 0); gl!.uniform1i(u("uPrev"), 0);
     bind(0, state![cur].tex);
@@ -746,12 +793,19 @@ export function createFrost(o: FrostOptions) {
   }
 
   /** The frost film, `secs` of the ice's time on. */
+  /** The frame inside the canvas, in cells (y up), for the programs that shape the glass round it; none, empty. */
+  function box(u: (name: string) => WebGLUniformLocation | null) {
+    const f = o.frame;
+    if (f) gl!.uniform4f(u("uBox"), f[0] * gw, (1 - f[3]) * gh, f[2] * gw, (1 - f[1]) * gh);
+    else gl!.uniform4f(u("uBox"), 0, 0, -1, -1);
+  }
   function stepFilm(secs: number) {
     if (!state || !aux || !film || secs <= 0) return;
     const u = use(P.film);
     gl!.viewport(0, 0, gw, gh);
     gl!.uniform1i(u("uS"), 0); gl!.uniform1i(u("uF"), 1); gl!.uniform1i(u("uA"), 2);
     gl!.uniform1f(u("uDt"), secs); gl!.uniform1f(u("uThaw"), thaw); gl!.uniform1f(u("uMax"), filmAt(cold));
+    box(u);
     bind(0, state[cur].tex); bind(1, film[fc].tex); bind(2, aux.tex);
     into(film[1 - fc]);
     fc = 1 - fc;

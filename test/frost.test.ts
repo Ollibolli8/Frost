@@ -3,7 +3,7 @@
 // (Kobayashi 1993, the same constants and the same 13-cell stencil), which must grow six arms along its own axes.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { COLD, MODEL, anisotropy, coldField, filmAt, random, seeds } from "../src/frost.ts";
+import { COLD, FRAME_WALL, MODEL, anisotropy, coldField, filmAt, random, seeds } from "../src/frost.ts";
 
 test("ε and dε/dθ are ε̄(1 + δ cos 6(θ − θ₀)) and its derivative, with no trig", () => {
   const rnd = random(1);
@@ -41,20 +41,34 @@ test("the same seed lays the same window out; the ice starts on the frame and a 
   }
 });
 
-test("round a frame inside the canvas the ice starts on the frame's edges, most at its foot, and nowhere else", () => {
+test("round a frame inside the canvas the ice starts beside the frame's line, never on it, most at its foot", () => {
   const frame: [number, number, number, number] = [0.27, 0.21, 0.73, 0.79];
   for (const [w, h] of [[1300, 520], [520, 330]]) {
     const a = seeds(w, h, 7, frame), b = seeds(w, h, 7, frame);
     assert.deepEqual(a, b);
     assert.equal(a.scratch, null);
-    assert.ok(a.seeds.length >= 12 && a.seeds.length <= 60, `${a.seeds.length} seeds`);
+    assert.ok(a.seeds.length >= 16 && a.seeds.length <= 60, `${a.seeds.length} seeds`);
     const x0 = frame[0] * w, x1 = frame[2] * w, y0 = (1 - frame[3]) * h, y1 = (1 - frame[1]) * h;
+    // signed distance to the frame's line: under 0 inside it
+    const line = (x: number, y: number) => {
+      const dx = Math.abs(x - (x0 + x1) / 2) - (x1 - x0) / 2, dy = Math.abs(y - (y0 + y1) / 2) - (y1 - y0) / 2;
+      return Math.hypot(Math.max(dx, 0), Math.max(dy, 0)) + Math.min(Math.max(dx, dy), 0);
+    };
+    let inside = 0, outside = 0;
     for (const s of a.seeds) {
       assert.ok(s.frame);
-      assert.ok(s.x >= x0 - 1e-9 && s.x <= x1 + 1e-9 && s.y >= y0 - 1e-9 && s.y <= y1 + 1e-9, "on the frame");
-      assert.ok(Math.min(s.x - x0, x1 - s.x, s.y - y0, y1 - s.y) < 1e-6, "on one of its edges");
+      const d = line(s.x, s.y);
+      // clear of the line that takes no ice (a crystal on it would grow all six arms: a snowflake), and close by it
+      assert.ok(Math.abs(d) > FRAME_WALL + 1 && Math.abs(d) < FRAME_WALL + 2, `${d.toFixed(2)} cells from the frame's line`);
+      if (d < 0) inside++; else {
+        outside++;
+        // outside, only at its two sides: above and below it the glass is warm
+        assert.ok(s.y > y0 && s.y < y1 && (s.x < x0 || s.x > x1), "an outside seed above or below the frame");
+      }
     }
-    const foot = a.seeds.filter(s => Math.abs(s.y - y0) < 1e-6).length, head = a.seeds.filter(s => Math.abs(s.y - y1) < 1e-6).length;
+    assert.ok(inside > outside && outside >= 4, `${inside} inside, ${outside} outside`);
+    const near = (v: number, e: number) => Math.abs(Math.abs(v - e) - (FRAME_WALL + 1.5)) < 1e-6;
+    const foot = a.seeds.filter(s => near(s.y, y0) && s.y > y0).length, head = a.seeds.filter(s => near(s.y, y1) && s.y < y1).length;
     assert.ok(foot > head * 3, `${foot} at the foot, ${head} at the head`);
   }
 });

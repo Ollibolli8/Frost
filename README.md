@@ -82,7 +82,9 @@ frost.setSource(camera.video, { mirror: camera.mirror });
 `frame: [left, top, right, bottom]` (shares of the canvas from its top left) grows the ice out of a frame inside the
 canvas instead of out of its own edges: lay a canvas larger than a picture over it, pass the page as it stands as the
 source, and the ferns grow out of the picture's frame, reaching out sideways and stopping, with only a thin fog
-outside it. work.draindk.tech frames its Maquettes with it.
+outside it. The frame's own line, two cells across, takes no ice, and each crystal starts just to one side of it: a
+crystal alone on the line grew all six of its arms, three in and three out, which reads as a paper snowflake, where
+half of one growing away from an edge reads as a fern. work.draindk.tech frames its Maquettes with it.
 
 `setCold(c)` (−20 to −2 °C), `thaw()`, `touch(x, y)` and `touch(null)` (a finger for keys and tests, in CSS px of
 the canvas), `setStill(s)`, `setActive(a)` (nothing stepped or drawn while off screen), `setPixelRatio(p)`,

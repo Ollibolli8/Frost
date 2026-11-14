@@ -80,8 +80,8 @@ export function random(seed: number) {
   };
 }
 
-/** Half the width, in cells, of the line of a frame inside the canvas that takes no ice: two cells across, which no
- *  term of the ice's step reaches over, so the ice inside the frame and the ice outside it grow apart. */
+/** Half the width, in cells, of the line of a frame inside the canvas that takes no ice of its own: two cells across,
+ *  which no term of the ice's step reaches over, so no crystal grows from one side of the frame to the other. */
 export const FRAME_WALL = 1;
 export type Seed = { x: number; y: number; r: number; angle: number; frame: boolean };
 export type Scratch = { ax: number; ay: number; bx: number; by: number; angle: number };
@@ -115,12 +115,32 @@ export function seeds(w: number, h: number, seed: number, frame?: Frame): { seed
     };
     const low = (e: number) => (u: number) => y0 + Math.pow(u, e) * fh;
     scatter(Math.max(3, Math.round(fw / (s * 0.1))), 2.5, u => [x0 + u * fw, y0], 0, 1);            // the foot, inside: densest
+    let from = list.length;
     scatter(Math.max(2, Math.round(fh / (s * 0.143))), 2.2, u => [x0, low(1.6)(u)], 1, 0);          // the left, inside, most low down
+    const left = list.slice(from);
+    from = list.length;
     scatter(Math.max(2, Math.round(fh / (s * 0.125))), 2.2, u => [x1, low(1.4)(u)], -1, 0);         // the right, inside
+    const right = list.slice(from);
     scatter(2, 2, u => [x0 + (0.15 + 0.7 * u) * fw, y1], 0, -1);                                    // the head, inside: hardly any
-    // outside, where the ferns leave the frame: its two sides only (above and below it the glass is warm)
-    scatter(Math.max(2, Math.round(fh / (s * 0.15))), 2.2, u => [x0, low(1.5)(u)], -1, 0);
-    scatter(Math.max(2, Math.round(fh / (s * 0.135))), 2.2, u => [x1, low(1.3)(u)], 1, 0);
+    // outside, where the ferns leave the frame: its two sides only (above and below it the glass is warm), each
+    // between two of that side's inside seeds (one straight across the line from an inside seed reads, with it, as
+    // one crystal with its spine on the frame: a star again)
+    const between = (x: number, inside: Seed[], dx: number) => {
+      const ys = [y0 + off, ...inside.map(q => q.y).sort((a, b) => a - b), y1 - off];
+      for (let i = 1; i < ys.length; i++) {
+        const gap = ys[i] - ys[i - 1];
+        if (gap < s * 0.07) continue;
+        // (a long stretch without an inside seed takes more than one)
+        const k = Math.max(1, Math.round(gap / (s * 0.17)));
+        for (let j = 0; j < k; j++) {
+          const u = rnd();
+          if (rnd() < 0.18) continue;
+          list.push({ x: x + dx * off, y: ys[i - 1] + gap * (j + 0.5 + (u - 0.5) * 0.3) / k, r: 2.2 + rnd() * 2.5, angle: angle(), frame: true });
+        }
+      }
+    };
+    between(x0, left, -1);
+    between(x1, right, 1);
     return { seeds: list.slice(0, 60), scratch: null };
   }
   const along = (n: number, at: (u: number) => [number, number]) => {
@@ -207,7 +227,7 @@ const f = (v: number) => (Number.isInteger(v) ? v.toFixed(1) : String(v));
  *  gives off; the finger's warmth W, which spreads, fades and melts the ice through. */
 const STEP = HEAD + `
 uniform sampler2D uS;    // p, T, W, water
-uniform sampler2D uA;    // cos θ0, sin θ0 (the crystal's turn), pinned (1: a seed on the frame; -1: no ice here), the glass's temperature
+uniform sampler2D uA;    // cos θ0, sin θ0 (the crystal's turn), pinned (1: a seed on the frame; under 0: the line of a frame inside the canvas), the glass's temperature
 uniform ivec2 uN;
 uniform uint uStep;
 uniform float uStepSec;  // real seconds this step stands for
@@ -257,8 +277,9 @@ void main() {
   float pn = pg * exp(-uStepSec * THAW * min(max(Te - TM, 0.0), warm));
   // a seed on the frame holds, unless warmed: the pane freezes again from there
   pn = max(pn, a.z * step(Te, TM));
-  // the line of a frame inside the canvas takes no ice
-  if (a.z < -0.5) pn = 0.0;
+  // the line of a frame inside the canvas takes no ice of its own, so no crystal grows across it; where ice stands on
+  // both sides of it the line freezes over between them (a.z: -1 where it runs up and down, -2 along, -3 at a corner)
+  if (a.z < -0.5) pn = a.z > -1.5 ? min(max(w.x, ww), max(e.x, ee)) : a.z > -2.5 ? min(max(so.x, ss), max(n.x, nn)) : 0.0;
   float lapT = (e.y + w.y + n.y + so.y - 4.0 * T) / (DX * DX);
   // freezing gives heat off and melting takes it in (from the finger): a melted spot is left colder, and freezes again
   float Tn = T + DT * lapT + K * (pn - p) + DT * COOL * (a.w - T);
@@ -327,8 +348,12 @@ void main() {
       float inside = min(min(q.x - lo.x, hi.x - q.x), min(q.y - lo.y, hi.y - q.y));
       glass = mix(uCold.x, uCold.y, pow(clamp(inside / (0.5 * s), 0.0, 1.0), 0.75)) - uCold.z * (1.0 - (q.y - lo.y) / (hi.y - lo.y)) - chill;
     }
-    // the frame's own line takes no ice, so a crystal grows on one side of it only (half a star: a fern)
-    if (abs(line) < WALL) { ice = 0.0; pin = -1.0; }
+    // the frame's own line takes no ice of its own, so a crystal grows on one side of it only (half a star: a fern)
+    if (abs(line) < WALL) {
+      vec2 dq = abs(abs(q - 0.5 * (lo + hi)) - 0.5 * (hi - lo));
+      ice = 0.0;
+      pin = dq.x < WALL && dq.y < WALL ? -3.0 : dq.x < WALL ? -1.0 : dq.y < WALL ? -2.0 : -3.0;
+    }
   }
   float water = uKeep == 1 ? texelFetch(uPrev, ivec2(q), 0).w : 0.0;
   o = uMode == 0 ? vec4(ice, glass, 0.0, water) : vec4(cos(turn), sin(turn), pin, glass);

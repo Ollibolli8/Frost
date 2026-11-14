@@ -67,6 +67,10 @@ test("round a frame inside the canvas the ice starts beside the frame's line, ne
       }
     }
     assert.ok(inside > outside && outside >= 4, `${inside} inside, ${outside} outside`);
+    // no outside seed straight across the line from an inside one at the same side: the two would read as one star
+    for (const o of a.seeds.filter(q => line(q.x, q.y) > 0)) for (const i of a.seeds.filter(q => line(q.x, q.y) < 0)) {
+      if (Math.abs(i.x - o.x) < 2 * (FRAME_WALL + 1.5) + 1e-6) assert.ok(Math.abs(i.y - o.y) > Math.min(x1 - x0, y1 - y0) * 0.02, `seeds face each other at y ${o.y.toFixed(1)}`);
+    }
     const near = (v: number, e: number) => Math.abs(Math.abs(v - e) - (FRAME_WALL + 1.5)) < 1e-6;
     const foot = a.seeds.filter(s => near(s.y, y0) && s.y > y0).length, head = a.seeds.filter(s => near(s.y, y1) && s.y < y1).length;
     assert.ok(foot > head * 3, `${foot} at the foot, ${head} at the head`);
